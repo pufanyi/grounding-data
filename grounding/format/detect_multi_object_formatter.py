@@ -33,7 +33,8 @@ def _format_entries(entries: Sequence[tuple[str, Sequence[float]]]) -> str:
     for name, bbox in entries:
         rounded = _round_bbox(bbox)
         parts.append(
-            f"{name}: [{rounded[0]:.3f}, {rounded[1]:.3f}, {rounded[2]:.3f}, {rounded[3]:.3f}]"
+            f"{name}: [{rounded[0]:.3f}, {rounded[1]:.3f}, "
+            f"{rounded[2]:.3f}, {rounded[3]:.3f}]"
         )
     return ", ".join(parts)
 
@@ -104,9 +105,7 @@ class DetectMultiObjectFormatter(Formatter):
             if bboxes
         }
         extra_pool: list[tuple[str, list[float]]] = [
-            (name, bbox)
-            for name, boxes in category_pool.items()
-            for bbox in boxes
+            (name, bbox) for name, boxes in category_pool.items() for bbox in boxes
         ]
 
         distractors: list[list[tuple[str, list[float]]]] = []
