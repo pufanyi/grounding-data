@@ -6,7 +6,12 @@ from ..utils.bbox import random_bbox
 from .formatter import Formatter, SITEData
 
 TEMPLATE = """\
-Please detect all regions corresponding to the {obj_name} in this image. Please provide the bounding box coordinates for the described objects using the format [x1, y1, x2, y2]. Here, [x1, y1] represent the top-left coordinates and [x2, y2] the bottom-right coordinates within a normalized range of 0 to 1, where [0, 0] is the top-left corner and [1, 1] is the bottom-right corner of the image. There are {count} bounding boxes to report.\
+Please detect all regions corresponding to the {obj_name} in this image. \
+Please provide the bounding box coordinates for the described objects using \
+the format [x1, y1, x2, y2]. Here, [x1, y1] represent the top-left coordinates \
+and [x2, y2] the bottom-right coordinates within a normalized range of 0 to 1, \
+where [0, 0] is the top-left corner and [1, 1] is the bottom-right corner of \
+the image. There are {count} bounding boxes to report.\
 """
 
 
