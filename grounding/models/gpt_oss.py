@@ -19,7 +19,7 @@ class GPTOSS(Model):
             {"role": "user", "content": prompt},
         ]
 
-        extra_body = {"chat_template_kwargs": {"thinking": False}}
+        extra_body = {"chat_template_kwargs": {"thinking": True}}
 
         response = self.client.chat.completions.create(
             model=self.model, messages=messages, extra_body=extra_body
@@ -32,4 +32,4 @@ class GPTOSS(Model):
 
 if __name__ == "__main__":
     model = GPTOSS()
-    print(model.generate("What is the capital of France?"))
+    print(model.generate("How many 'r's are in the word 'strawberry'?"))

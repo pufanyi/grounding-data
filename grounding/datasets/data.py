@@ -79,7 +79,8 @@ class GroundingDataset:
 if __name__ == "__main__":
     dataset = GroundingDataset(
         "/mnt/aigc/users/pufanyi/workspace/playground/grouding/data/jsonl",
-        max_items=100,
+        # max_items=100,
     )
     for data in dataset.parse_data():
-        logger.info(data)
+        # logger.info(data)
+        pass
