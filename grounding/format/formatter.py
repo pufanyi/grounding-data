@@ -14,7 +14,7 @@ class SITEData(BaseModel):
     question_type: str
 
 
-class Formater(ABC):
+class Formatter(ABC):
     def __init__(self, name: str):
         self.name = name
 

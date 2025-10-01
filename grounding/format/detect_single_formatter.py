@@ -2,7 +2,7 @@ import random
 
 from ..datasets.data import GroundingData
 from ..utils.bbox import random_bbox
-from .formater import Formater, SITEData
+from .formatter import Formatter, SITEData
 
 TEMPLATE = """\
 Please detect the {obj_name} in this image and represent them \
@@ -14,7 +14,7 @@ within a normalized range of 0 to 1, where [0, 0] is the top-left corner and \
 """
 
 
-class DetectSingleFormater(Formater):
+class DetectSingleFormatter(Formatter):
     def __init__(self):
         super().__init__("detect_single")
 
