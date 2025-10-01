@@ -8,20 +8,18 @@ from loguru import logger
 from pydantic import BaseModel
 from tqdm import tqdm
 
-
-class BBoxObj(BaseModel):
-    bbox: list[float]
-    label: str
-
-
 _REF_PATTERN = re.compile(
     r"<ref>(?P<label>.+?)</ref>\s*(?P<bboxes>\[\[.*?\]\])", re.DOTALL
 )
 
 
 class GroundingData(BaseModel):
+    source_dataset: str
+    source_id: str
     image: str
-    objs: list[BBoxObj]
+    objs: dict[str, list[list[float]]]
+    num_objs: int
+    num_bbox: int
 
 
 class GroundingDataset:
@@ -43,34 +41,46 @@ class GroundingDataset:
         self.data = []
         for data_path in tqdm(self.data_paths, desc="Loading data"):
             with data_path.open("r") as f:
-                self.data.extend([json.loads(line) for line in f])
+                self.data.extend(
+                    [{"data": json.loads(line), "source": data_path.name} for line in f]
+                )
 
         if self.max_items is not None:
             self.data = self.data[: self.max_items]
 
     def parse_item(self, item: dict) -> GroundingData:
-        assert len(item["image"]) == 1, "Only one image is supported"
-        image = item["image"][0]
-        objs: list[BBoxObj] = []
-        for conv in item["conversations"]:
+        assert len(item["data"]["image"]) == 1, "Only one image is supported"
+        image = item["data"]["image"][0]
+        objs: dict[str, list[list[float]]] = {}
+        for conv in item["data"]["conversations"]:
             if conv["from"] == "gpt":
                 conv_str = conv["value"]
                 for match in _REF_PATTERN.finditer(conv_str):
-                    label = match.group("label").strip()
+                    label = match.group("label").strip().lower()
                     bboxes = json.loads(match.group("bboxes"))
+                    if label not in objs:
+                        objs[label] = []
                     for bbox in bboxes:
-                        objs.append(
-                            BBoxObj(bbox=[float(coord) for coord in bbox], label=label)
-                        )
-        return GroundingData(image=image, objs=objs)
+                        objs[label].append([float(coord) for coord in bbox])
+        return GroundingData.model_validate(
+            {
+                "image": image,
+                "objs": objs,
+                "source_dataset": item["source"],
+                "source_id": str(item["data"]["id"]),
+                "num_objs": len(objs),
+                "num_bbox": sum(len(bboxes) for bboxes in objs.values()),
+            }
+        )
 
     def parse_data(self) -> Iterable[GroundingData]:
         for item in tqdm(self.data):
             result = self.parse_item(item)
-            if len(result.objs) == 0:
+            if result.num_objs == 0:
                 logger.warning(
-                    f"No objects found in item {item['id']}, "
-                    f"the conversation is {item['conversations']}"
+                    f"No objects found in item"
+                    f" {item['data']['id']} from {item['source']},"
+                    f" the conversation is {item['data']['conversations']}"
                 )
                 continue
             yield result
@@ -79,7 +89,7 @@ class GroundingDataset:
 if __name__ == "__main__":
     dataset = GroundingDataset(
         "/mnt/aigc/users/pufanyi/workspace/playground/grouding/data/jsonl",
-        max_items=100,
     )
-    for data in dataset.parse_data():
-        logger.info(data)
+    with open("data/result_dataset.jsonl", "w") as f:
+        for data in dataset.parse_data():
+            f.write(data.model_dump_json() + "\n")
