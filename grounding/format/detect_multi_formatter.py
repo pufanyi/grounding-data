@@ -10,7 +10,9 @@ Please detect all regions corresponding to the {obj_name} in this image. Please 
 """
 
 
-def _signature(bboxes: list[list[float]]) -> tuple[tuple[float, float, float, float], ...]:
+def _signature(
+    bboxes: list[list[float]],
+) -> tuple[tuple[float, float, float, float], ...]:
     return tuple(tuple(value for value in bbox) for bbox in bboxes)
 
 
@@ -68,7 +70,9 @@ class DetectMultiFormatter(Formatter):
             attempts += 1
 
         while len(distractors) < 8:
-            candidate = [random_bbox(random.choice(target_bboxes)) for _ in range(target_len)]
+            candidate = [
+                random_bbox(random.choice(target_bboxes)) for _ in range(target_len)
+            ]
             add_candidate(candidate)
 
         choices = [target_bboxes]
