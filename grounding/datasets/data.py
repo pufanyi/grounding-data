@@ -25,16 +25,28 @@ class GroundingData(BaseModel):
 
 
 class GroundingDataset:
-    def __init__(self, data_path: str | os.PathLike, max_items: int | None = None):
-        self.data_path = Path(data_path)
-        self.max_items = max_items
+    def __init__(
+        self,
+        data_path: str | os.PathLike | list[str | os.PathLike],
+        max_items: int | None = None,
+    ):
+        if isinstance(data_path, str | os.PathLike):
+            data_path = Path(data_path)
+            if data_path.is_file():
+                self.data_paths = [data_path]
+            else:
+                self.data_paths = [Path(path) for path in data_path.glob("*.jsonl")]
+        else:
+            self.data_paths = [Path(path) for path in data_path]
 
-        with self.data_path.open("r") as f:
-            self.data = []
-            for line in f:
-                self.data.append(json.loads(line))
-                if self.max_items is not None and len(self.data) >= self.max_items:
-                    break
+        self.max_items = max_items
+        self.data = []
+        for data_path in tqdm(self.data_paths, desc="Loading data"):
+            with data_path.open("r") as f:
+                self.data.extend([json.loads(line) for line in f])
+
+        if self.max_items is not None:
+            self.data = self.data[: self.max_items]
 
     def parse_item(self, item: dict) -> GroundingData:
         assert len(item["image"]) == 1, "Only one image is supported"
@@ -66,7 +78,7 @@ class GroundingDataset:
 
 if __name__ == "__main__":
     dataset = GroundingDataset(
-        "/mnt/aigc/users/pufanyi/workspace/playground/grouding/data/jsonl/grit_detcap_en.jsonl",
+        "/mnt/aigc/users/pufanyi/workspace/playground/grouding/data/jsonl",
         max_items=100,
     )
     for data in dataset.parse_data():
