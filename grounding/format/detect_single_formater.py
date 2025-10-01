@@ -1,7 +1,9 @@
 import random
 
 from ..datasets.data import GroundingData
-from .format import SITEData
+from .formater import SITEData
+from .formater import Formater
+from ..utils.bbox import random_bbox
 
 TEMPLATE = """\
 Please detect the {obj_name} in this image and represent them \
@@ -13,7 +15,7 @@ within a normalized range of 0 to 1, where [0, 0] is the top-left corner and \
 """
 
 
-class DetectSingleFormat:
+class DetectSingleFormater(Formater):
     def __init__(self):
         super().__init__("detect_single")
 
@@ -25,10 +27,33 @@ class DetectSingleFormat:
 
     def format(self, data: GroundingData) -> SITEData:
         all_single_objs = []
+        other_bboxes = []
         for key, bboxes in data.objs.items():
             if len(bboxes) == 1:
                 all_single_objs.append((key, bboxes[0]))
+            else:
+                other_bboxes.extend(bboxes)
         obj_name, bbox = random.choice(all_single_objs)
+        for n, b in all_single_objs:
+            if n != obj_name:
+                other_bboxes.append(b)
+        for start_str in ["a ", "an ", "the "]:
+            if obj_name.startswith(start_str):
+                obj_name = obj_name[len(start_str):]
+                break
         input_text = TEMPLATE.format(obj_name=obj_name)
-        choices = [str(bbox)]
-        return input_text, choices
+        choices = [bbox]
+        while len(other_bboxes) < 8:
+            other_bboxes.append(random_bbox(bbox))
+        choices.extend(random.sample(other_bboxes, 3))
+        choices = [str(choice) for choice in choices]
+        return SITEData.model_validate(
+            {
+                "source_dataset": data.source_dataset,
+                "source_id": data.source_id,
+                "image": data.image,
+                "question": input_text,
+                "choices": choices,
+                "question_type": self.name,
+            }
+        )
