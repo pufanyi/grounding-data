@@ -67,20 +67,27 @@ def _template_block(question: str, option_pairs: Sequence[Tuple[str, str]]) -> s
         "Options:",
     ]
     lines.extend(f"{letter}. {text}" for letter, text in option_pairs)
-    lines.append(f"Please answer the question with a single {instruction} directly.")
+    lines.extend(
+        [
+            "",
+            f"Please answer the question with a single {instruction} directly.",
+        ]
+    )
     return "\n".join(lines)
 
 
 def _template_inline(question: str, option_pairs: Sequence[Tuple[str, str]]) -> str:
     instruction = _letter_instruction(option_pairs)
-    rendered_options = " ".join(
-        f"{letter}) {text}" for letter, text in option_pairs
-    )
-    return (
-        f"{question.rstrip()} Choose the best option and respond with a single "
-        f"letter ({instruction}). Please answer the question with a single {instruction} directly. "
-        f"Options: {rendered_options}"
-    )
+    lines = [
+        question.rstrip(),
+        "",
+        f"Choose the best option and respond with a single letter ({instruction}).",
+        f"Please answer the question with a single {instruction} directly.",
+        "",
+        "Options:",
+    ]
+    lines.extend(f"{letter}) {text}" for letter, text in option_pairs)
+    return "\n".join(lines)
 
 
 def _template_steps(question: str, option_pairs: Sequence[Tuple[str, str]]) -> str:
@@ -91,8 +98,11 @@ def _template_steps(question: str, option_pairs: Sequence[Tuple[str, str]]) -> s
         "Consider these candidates:",
     ]
     lines.extend(f"- Option {letter}: {text}" for letter, text in option_pairs)
-    lines.append(
-        f"Please answer the question with a single {instruction} directly with no extra text."
+    lines.extend(
+        [
+            "",
+            f"Please answer the question with a single {instruction} directly with no extra text.",
+        ]
     )
     return "\n".join(lines)
 
