@@ -19,13 +19,18 @@ class DetectMultiFormatter(Formatter):
         super().__init__("detect_multi")
 
     def check_eligible(self, data: GroundingData) -> bool:
-        return any(len(bboxes) > 1 for bboxes in data.objs.values())
+        if any(len(bboxes) > 1 for bboxes in data.objs.values()):
+            return True
+        return random.random() < 0.1
 
     def format(self, data: GroundingData) -> SITEData:
         multi_objs = [
             (name, bboxes) for name, bboxes in data.objs.items() if len(bboxes) > 1
         ]
-        obj_name, target_bboxes = random.choice(multi_objs)
+        if len(multi_objs) == 0:
+            obj_name, target_bboxes = random.choice(list(data.objs.items()))
+        else:
+            obj_name, target_bboxes = random.choice(multi_objs)
         target_len = len(target_bboxes)
 
         cleaned_obj_name = obj_name
