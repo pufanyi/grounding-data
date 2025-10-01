@@ -147,11 +147,11 @@ def _convert_record(record: dict, rng: random.Random) -> dict:
     }
 
 
-def _convert_file(path: Path, rng: random.Random) -> Path:
+def _convert_file(path: Path, output_dir: Path, rng: random.Random) -> Path:
     if not path.exists():
         raise FileNotFoundError(f"Input file not found: {path}")
 
-    output_path = path.with_name(f"{path.stem}_chat.jsonl")
+    output_path = output_dir / f"{path.stem}_chat.jsonl"
 
     with output_path.open("w") as output_handle:
         for record in _load_jsonl(path):
@@ -166,7 +166,7 @@ def main(argv: Iterable[str] | None = None) -> None:
     parser.add_argument(
         "--seed",
         type=int,
-        default=42,
+        default=None,
         help="Optional random seed for deterministic shuffling.",
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
@@ -175,10 +175,12 @@ def main(argv: Iterable[str] | None = None) -> None:
 
     root = Path(__file__).resolve().parents[2]
     data_dir = root / "data"
+    output_dir = root / "final_data"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     for name in DATASET_NAMES:
         input_path = data_dir / f"{name}.jsonl"
-        output_path = _convert_file(input_path, rng)
+        output_path = _convert_file(input_path, output_dir, rng)
         print(f"Converted {input_path} -> {output_path}")
 
 
