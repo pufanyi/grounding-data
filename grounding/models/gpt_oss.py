@@ -28,3 +28,8 @@ class GPTOSS(Model):
         content = response.choices[0].message.content
 
         return content
+
+
+if __name__ == "__main__":
+    model = GPTOSS()
+    print(model.generate("What is the capital of France?"))
