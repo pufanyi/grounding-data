@@ -17,7 +17,7 @@ class FormatterSpec(NamedTuple):
     output_path: Path
 
 
-TARGET_COUNT = 10_000
+TARGET_COUNT = 100_000
 
 
 def _root_dir() -> Path:
@@ -28,8 +28,14 @@ def main() -> None:
     root = _root_dir()
     dataset_path = root / "data" / "result_dataset.jsonl"
     formatter_specs = [
-        FormatterSpec("detect_single", DetectSingleFormatter(), root / "data" / "detect_single.jsonl"),
-        FormatterSpec("detect_multi", DetectMultiFormatter(), root / "data" / "detect_multi.jsonl"),
+        FormatterSpec(
+            "detect_single",
+            DetectSingleFormatter(),
+            root / "data" / "detect_single.jsonl",
+        ),
+        FormatterSpec(
+            "detect_multi", DetectMultiFormatter(), root / "data" / "detect_multi.jsonl"
+        ),
         FormatterSpec(
             "detect_multi_object",
             DetectMultiObjectFormatter(),
@@ -68,14 +74,22 @@ def main() -> None:
                 if all(counts[name] >= targets[name] for name in counts):
                     break
 
-    missing = {name: targets[name] - counts[name] for name in counts if counts[name] < targets[name]}
+    missing = {
+        name: targets[name] - counts[name]
+        for name in counts
+        if counts[name] < targets[name]
+    }
     if missing:
         raise RuntimeError(
-            "Unable to satisfy target counts: " + json.dumps(missing, ensure_ascii=False)
+            "Unable to satisfy target counts: "
+            + json.dumps(missing, ensure_ascii=False)
         )
 
     for spec in formatter_specs:
-        print(f"Generated {counts[spec.name]} examples for {spec.name} -> {spec.output_path}")
+        print(
+            f"Generated {counts[spec.name]} examples "
+            f"for {spec.name} -> {spec.output_path}"
+        )
 
 
 if __name__ == "__main__":

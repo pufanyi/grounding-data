@@ -3,8 +3,9 @@ from __future__ import annotations
 import argparse
 import json
 import random
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import Iterable, Iterator, Sequence, Tuple
+from typing import NamedTuple
 
 DATASET_NAMES = [
     "detect_single",
@@ -13,6 +14,17 @@ DATASET_NAMES = [
 ]
 
 OPTION_LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+
+class InstructionContext(NamedTuple):
+    letters: tuple[str, ...]
+    descriptor: str
+    lowercase_descriptor: str
+
+
+class ResponseStyle(NamedTuple):
+    instruction_builder: Callable[[InstructionContext], list[str]]
+    answer_builder: Callable[[str], str]
 
 
 def _load_jsonl(path: Path) -> Iterator[dict]:
@@ -32,14 +44,14 @@ def _ensure_list(image_field: str | Sequence[str]) -> list[str]:
 
 def _shuffle_choices(
     choices: Sequence[str], rng: random.Random
-) -> Tuple[list[Tuple[str, str]], str]:
+) -> tuple[list[tuple[str, str]], str]:
     if len(choices) > len(OPTION_LETTERS):
         raise ValueError("Too many choices to assign unique letters")
 
     indexed = list(enumerate(choices))
     rng.shuffle(indexed)
 
-    option_pairs: list[Tuple[str, str]] = []
+    option_pairs: list[tuple[str, str]] = []
     correct_letter: str | None = None
 
     for position, (original_index, choice_text) in enumerate(indexed):
@@ -54,60 +66,117 @@ def _shuffle_choices(
     return option_pairs, correct_letter
 
 
-def _letter_instruction(option_pairs: Sequence[Tuple[str, str]]) -> str:
-    letters = "/".join(letter for letter, _ in option_pairs[:4])
-    return "A/B/C/D" if len(option_pairs) == 4 else letters
+def _letter_instruction(option_pairs: Sequence[tuple[str, str]]) -> str:
+    letters = [letter for letter, _ in option_pairs]
+    if len(letters) == 4:
+        return "A/B/C/D"
+    return "/".join(letters)
 
 
-def _template_block(question: str, option_pairs: Sequence[Tuple[str, str]]) -> str:
-    instruction = _letter_instruction(option_pairs)
+def _instruction_context(option_pairs: Sequence[tuple[str, str]]) -> InstructionContext:
+    letters = tuple(letter for letter, _ in option_pairs)
+    descriptor = _letter_instruction(option_pairs)
+    lowercase_descriptor = "/".join(letter.lower() for letter in letters)
+    return InstructionContext(letters, descriptor, lowercase_descriptor)
+
+
+def _template_block(
+    question: str,
+    option_pairs: Sequence[tuple[str, str]],
+    instruction_lines: Sequence[str],
+) -> str:
     lines = [
         question.rstrip(),
         "",
         "Options:",
     ]
     lines.extend(f"{letter}. {text}" for letter, text in option_pairs)
-    lines.extend(
-        [
-            "",
-            f"Please answer the question with a single {instruction} directly.",
-        ]
-    )
+    if instruction_lines:
+        lines.append("")
+        lines.extend(instruction_lines)
     return "\n".join(lines)
 
 
-def _template_inline(question: str, option_pairs: Sequence[Tuple[str, str]]) -> str:
-    instruction = _letter_instruction(option_pairs)
-    lines = [
-        question.rstrip(),
-        "",
-        f"Choose the best option and respond with a single letter ({instruction}).",
-        f"Please answer the question with a single {instruction} directly.",
-        "",
-        "Options:",
-    ]
-    lines.extend(f"{letter}) {text}" for letter, text in option_pairs)
+def _template_inline(
+    question: str,
+    option_pairs: Sequence[tuple[str, str]],
+    instruction_lines: Sequence[str],
+) -> str:
+    lines = [question.rstrip()]
+    if instruction_lines:
+        lines.append("")
+        lines.extend(instruction_lines)
+    lines.append("")
+    lines.append("Options:")
+    rendered_options = " ".join(f"{letter}) {text}" for letter, text in option_pairs)
+    lines.append(rendered_options)
     return "\n".join(lines)
 
 
-def _template_steps(question: str, option_pairs: Sequence[Tuple[str, str]]) -> str:
-    instruction = _letter_instruction(option_pairs)
+def _template_steps(
+    question: str,
+    option_pairs: Sequence[tuple[str, str]],
+    instruction_lines: Sequence[str],
+) -> str:
     lines = [
         question.rstrip(),
         "",
         "Consider these candidates:",
     ]
     lines.extend(f"- Option {letter}: {text}" for letter, text in option_pairs)
-    lines.extend(
-        [
-            "",
-            f"Please answer the question with a single {instruction} directly with no extra text.",
-        ]
-    )
+    if instruction_lines:
+        lines.append("")
+        lines.extend(instruction_lines)
     return "\n".join(lines)
 
 
 TEMPLATES = [_template_block, _template_inline, _template_steps]
+
+
+def _style_letter_only(ctx: InstructionContext) -> list[str]:
+    return [
+        "Choose the best option from the list.",
+        f"Respond with only the letter ({ctx.descriptor}).",
+    ]
+
+
+def _style_answer_prefix(ctx: InstructionContext) -> list[str]:
+    return [
+        "Select the most accurate choice.",
+        f"Reply using the exact format `Answer: X` where X is one of {ctx.descriptor}.",
+        "No additional text is allowed.",
+    ]
+
+
+def _style_final_answer(ctx: InstructionContext) -> list[str]:
+    return [
+        "Pick the option that fits best.",
+        f"Return it as `Final answer: X` using one of {ctx.descriptor}.",
+    ]
+
+
+def _style_lowercase(ctx: InstructionContext) -> list[str]:
+    return [
+        "Determine the correct candidate.",
+        f"Respond in lowercase using only {ctx.lowercase_descriptor}.",
+    ]
+
+
+def _style_option_prefix(ctx: InstructionContext) -> list[str]:
+    return [
+        "Choose the most suitable option.",
+        f"Reply as `Option X` where X is one of {ctx.descriptor}.",
+        "Do not include any other words.",
+    ]
+
+
+RESPONSE_STYLES = [
+    ResponseStyle(_style_letter_only, lambda letter: letter),
+    ResponseStyle(_style_answer_prefix, lambda letter: f"Answer: {letter}"),
+    ResponseStyle(_style_final_answer, lambda letter: f"Final answer: {letter}"),
+    ResponseStyle(_style_lowercase, lambda letter: letter.lower()),
+    ResponseStyle(_style_option_prefix, lambda letter: f"Option {letter}"),
+]
 
 
 def _convert_record(record: dict, rng: random.Random) -> dict:
@@ -120,8 +189,15 @@ def _convert_record(record: dict, rng: random.Random) -> dict:
     option_pairs, correct_letter = _shuffle_choices(choices, rng)
     question = record.get("question", "").strip()
 
+    context = _instruction_context(option_pairs)
+    style = rng.choice(RESPONSE_STYLES)
+    instruction_lines = style.instruction_builder(context)
+    if not instruction_lines:
+        raise ValueError("Instruction builder returned no content")
+
     template = rng.choice(TEMPLATES)
-    human_prompt = template(question, option_pairs)
+    human_prompt = template(question, option_pairs, instruction_lines)
+    assistant_value = style.answer_builder(correct_letter)
 
     raw_image = record.get("image", [])
     image_list = _ensure_list(raw_image)
@@ -141,7 +217,7 @@ def _convert_record(record: dict, rng: random.Random) -> dict:
         "id": converted_id,
         "conversations": [
             {"from": "human", "value": human_prompt},
-            {"from": "gpt", "value": correct_letter},
+            {"from": "gpt", "value": assistant_value},
         ],
         "image_count": len(image_list),
     }
@@ -162,7 +238,9 @@ def _convert_file(path: Path, output_dir: Path, rng: random.Random) -> Path:
 
 
 def main(argv: Iterable[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Convert grounding data to chat format.")
+    parser = argparse.ArgumentParser(
+        description="Convert grounding data to chat format."
+    )
     parser.add_argument(
         "--seed",
         type=int,
