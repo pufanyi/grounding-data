@@ -1,9 +1,8 @@
 import random
 
 from ..datasets.data import GroundingData
-from .formater import SITEData
-from .formater import Formater
 from ..utils.bbox import random_bbox
+from .formater import Formater, SITEData
 
 TEMPLATE = """\
 Please detect the {obj_name} in this image and represent them \
@@ -39,7 +38,7 @@ class DetectSingleFormater(Formater):
                 other_bboxes.append(b)
         for start_str in ["a ", "an ", "the "]:
             if obj_name.startswith(start_str):
-                obj_name = obj_name[len(start_str):]
+                obj_name = obj_name[len(start_str) :]
                 break
         input_text = TEMPLATE.format(obj_name=obj_name)
         choices = [bbox]
