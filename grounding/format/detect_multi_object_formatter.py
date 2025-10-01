@@ -2,17 +2,25 @@ import random
 from collections.abc import Sequence
 
 from ..datasets.data import GroundingData
-from ..utils.bbox import random_bbox
 from .formatter import Formatter, SITEData
 
-TEMPLATE = """Please detect all instances of the following categories in this image: {categories}. For each detected object, provide the output in the format category:[x1, y1, x2, y2]. Here, [x1, y1] represent the top-left coordinates and [x2, y2] the bottom-right coordinates within a normalized range of 0 to 1, where [0, 0] is the top-left corner and [1, 1] is the bottom-right corner of the image."""
+TEMPLATE = """\
+Please detect all instances of the following categories in this image: \
+{categories}. For each detected object, provide the output in the format \
+category:[x1, y1, x2, y2]. Here, [x1, y1] represent the top-left coordinates \
+and [x2, y2] the bottom-right coordinates within a normalized range of 0 to 1, \
+where [0, 0] is the top-left corner and [1, 1] is the bottom-right corner of \
+the image.\
+"""
 
 
 def _round_bbox(bbox: Sequence[float]) -> list[float]:
     return [round(coord, 3) for coord in bbox]
 
 
-def _signature(entries: Sequence[tuple[str, Sequence[float]]]) -> tuple[tuple[str, tuple[float, float, float, float]], ...]:
+def _signature(
+    entries: Sequence[tuple[str, Sequence[float]]],
+) -> tuple[tuple[str, tuple[float, float, float, float]], ...]:
     signature = []
     for name, bbox in entries:
         rounded = tuple(round(coord, 3) for coord in bbox)
@@ -24,11 +32,15 @@ def _format_entries(entries: Sequence[tuple[str, Sequence[float]]]) -> str:
     parts: list[str] = []
     for name, bbox in entries:
         rounded = _round_bbox(bbox)
-        parts.append(f"{name}: [{rounded[0]:.3f}, {rounded[1]:.3f}, {rounded[2]:.3f}, {rounded[3]:.3f}]")
+        parts.append(
+            f"{name}: [{rounded[0]:.3f}, {rounded[1]:.3f}, {rounded[2]:.3f}, {rounded[3]:.3f}]"
+        )
     return ", ".join(parts)
 
 
-def _clone_entries(entries: Sequence[tuple[str, Sequence[float]]]) -> list[tuple[str, list[float]]]:
+def _clone_entries(
+    entries: Sequence[tuple[str, Sequence[float]]],
+) -> list[tuple[str, list[float]]]:
     return [(name, list(bbox)) for name, bbox in entries]
 
 
@@ -37,20 +49,21 @@ class DetectMultiObjectFormatter(Formatter):
         super().__init__("detect_multi_object")
 
     def check_eligible(self, data: GroundingData) -> bool:
-        multi_objs = [bboxes for bboxes in data.objs.values() if len(bboxes) > 1]
-        return len(multi_objs) >= 2
+        return data.num_objs >= 2
 
     def format(self, data: GroundingData) -> SITEData:
-        multi_objs = {name: bboxes for name, bboxes in data.objs.items() if len(bboxes) > 1}
-        target_names = list(multi_objs)
+        candidate_objs = {name: bboxes for name, bboxes in data.objs.items() if bboxes}
+        target_names = list(candidate_objs)
 
         max_categories = min(4, len(target_names))
-        sample_size = random.randint(2, max_categories) if max_categories > 2 else max_categories
+        sample_size = (
+            random.randint(2, max_categories) if max_categories > 2 else max_categories
+        )
         chosen_names = random.sample(target_names, sample_size)
 
         target_entries: list[tuple[str, list[float]]] = []
         for name in chosen_names:
-            bboxes = multi_objs[name]
+            bboxes = candidate_objs[name]
             take = min(len(bboxes), 3)
             selected = random.sample(bboxes, take)
             for bbox in selected:
@@ -136,7 +149,9 @@ class DetectMultiObjectFormatter(Formatter):
         random.shuffle(entries)
         return entries
 
-    def _fallback_entries(self, base_entries: Sequence[tuple[str, Sequence[float]]]) -> list[tuple[str, list[float]]]:
+    def _fallback_entries(
+        self, base_entries: Sequence[tuple[str, Sequence[float]]]
+    ) -> list[tuple[str, list[float]]]:
         entries = _clone_entries(base_entries)
         idx = random.randrange(len(entries))
         name, bbox = entries[idx]
