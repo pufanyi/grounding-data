@@ -12,7 +12,10 @@ if __name__ == "__main__":
         for line in f:
             data = GroundingData.model_validate_json(line)
             if formatter.check_eligible(data):
+                print("==========")
+                print(data)
                 print(formatter.format(data))
                 num += 1
-                if num > 10:
+                print("----")
+                if num > 1:
                     break
