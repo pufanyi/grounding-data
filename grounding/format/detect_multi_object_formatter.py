@@ -72,6 +72,43 @@ def _aggressive_variant(
     return variant
 
 
+def _label_swap_variant(
+    entries: Sequence[tuple[str, Sequence[float]]],
+) -> list[tuple[str, list[float]]]:
+    """
+    Generate a variant by swapping labels between two bboxes with different categories.
+    """
+    variant = _clone_entries(entries)
+    if len(variant) < 2:
+        return variant
+
+    # Find pairs with different categories
+    different_category_pairs = []
+    for i in range(len(variant)):
+        for j in range(i + 1, len(variant)):
+            if variant[i][0] != variant[j][0]:  # Different category names
+                different_category_pairs.append((i, j))
+
+    if not different_category_pairs:
+        # If all entries have the same category, just shuffle
+        random.shuffle(variant)
+        return variant
+
+    # Swap labels for 1-2 random pairs
+    num_swaps = min(random.randint(1, 2), len(different_category_pairs))
+    swap_pairs = random.sample(different_category_pairs, num_swaps)
+
+    for i, j in swap_pairs:
+        # Swap the category names while keeping bboxes
+        name_i, bbox_i = variant[i]
+        name_j, bbox_j = variant[j]
+        variant[i] = (name_j, bbox_i)
+        variant[j] = (name_i, bbox_j)
+
+    random.shuffle(variant)
+    return variant
+
+
 class DetectMultiObjectFormatter(Formatter):
     def __init__(self) -> None:
         super().__init__("detect_multi_object")
@@ -83,7 +120,7 @@ class DetectMultiObjectFormatter(Formatter):
         candidate_objs = {name: bboxes for name, bboxes in data.objs.items() if bboxes}
         target_names = list(candidate_objs)
 
-        max_categories = min(4, len(target_names))
+        max_categories = min(6, len(target_names))
         sample_size = (
             random.randint(2, max_categories) if max_categories > 2 else max_categories
         )
@@ -108,34 +145,54 @@ class DetectMultiObjectFormatter(Formatter):
             (name, bbox) for name, boxes in category_pool.items() for bbox in boxes
         ]
 
+        # Strategy: 80% label swap, 20% mutation
+        # Each distractor is generated using random.choice based on these probabilities
         distractors: list[list[tuple[str, list[float]]]] = []
         used_signatures = {_signature(target_entries)}
         target_len = len(target_entries)
 
-        def add_candidate(candidate: list[tuple[str, list[float]]]) -> None:
+        def add_candidate(candidate: list[tuple[str, list[float]]]) -> bool:
             if len(candidate) != target_len:
-                return
+                return False
             signature = _signature(candidate)
             if signature not in used_signatures:
                 distractors.append(candidate)
                 used_signatures.add(signature)
+                return True
+            return False
 
+        # Generate 3 distractors using weighted random choice (80% swap, 20% mutate)
         attempts = 0
-        while len(distractors) < 3 and attempts < 100:
-            candidate = self._mutate_entries(target_entries, category_pool, extra_pool)
+        while len(distractors) < 3 and attempts < 300:
+            # 80% probability for label swap, 20% for mutation
+            if random.random() < 0.8:
+                candidate = _label_swap_variant(target_entries)
+            else:
+                candidate = self._mutate_entries(
+                    target_entries, category_pool, extra_pool
+                )
             add_candidate(candidate)
             attempts += 1
 
-        fallback_attempts = 0
-        while len(distractors) < 3 and fallback_attempts < 200:
+        # Additional fallback with gentle mutation
+        gentle_attempts = 0
+        while len(distractors) < 3 and gentle_attempts < 100:
             candidate = self._fallback_entries(target_entries, category_pool)
-            add_candidate(candidate)
-            fallback_attempts += 1
+            if len(candidate) == target_len:
+                signature = _signature(candidate)
+                if signature not in used_signatures:
+                    distractors.append(candidate)
+                    used_signatures.add(signature)
+            gentle_attempts += 1
 
         force_delta = 0.12
         while len(distractors) < 3 and force_delta <= 0.24:
             candidate = _aggressive_variant(target_entries, max_delta=force_delta)
-            add_candidate(candidate)
+            if len(candidate) == target_len:
+                signature = _signature(candidate)
+                if signature not in used_signatures:
+                    distractors.append(candidate)
+                    used_signatures.add(signature)
             force_delta += 0.04
 
         heavy_attempts = 0
