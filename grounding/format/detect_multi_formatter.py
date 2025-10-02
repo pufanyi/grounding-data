@@ -6,12 +6,13 @@ from ..utils.bbox import random_bbox
 from .formatter import Formatter, SITEData
 
 TEMPLATE = """\
-Please detect all regions corresponding to the {obj_name} in this image. \
-Please provide the bounding box coordinates for the described objects using \
-the format [x1, y1, x2, y2]. Here, [x1, y1] represent the top-left coordinates \
-and [x2, y2] the bottom-right coordinates within a normalized range of 0 to 1, \
-where [0, 0] is the top-left corner and [1, 1] is the bottom-right corner of \
-the image. There are {count} bounding boxes to report.\
+Please detect all the {obj_name} in this image. \
+Please provide the bounding box coordinates for the \
+described object or area using the format [x1, y1, x2, y2]. \
+Here, [x1, y1] represent the top-left coordinates and [x2, y2] \
+the bottom-right coordinates within a normalized range of 0 to 1, \
+where [0, 0] is the top-left corner and [1, 1] is the bottom-right \
+corner of the image.\
 """
 
 
@@ -46,13 +47,27 @@ class DetectMultiFormatter(Formatter):
                 cleaned_obj_name = cleaned_obj_name[len(start_str) :]
                 break
 
-        prompt = TEMPLATE.format(obj_name=cleaned_obj_name, count=target_len)
+        prompt = TEMPLATE.format(obj_name=cleaned_obj_name)
 
         distractors: list[list[list[float]]] = []
         used_signatures = {_signature(target_bboxes)}
 
+        # Collect all other bboxes from the image as a pool
+        other_bboxes_pool: list[list[float]] = []
+        for name, bboxes in data.objs.items():
+            if name != obj_name:
+                other_bboxes_pool.extend(bboxes)
+
+        def get_random_bbox() -> list[float]:
+            """Get a bbox, preferring real bboxes from other objects"""
+            if other_bboxes_pool and random.random() < 0.8:  # 80% chance to use real bbox
+                return random.choice(other_bboxes_pool)
+            else:
+                return random_bbox(random.choice(target_bboxes))
+
         def add_candidate(candidate: list[list[float]]) -> None:
-            if len(candidate) != target_len:
+            # Allow candidates with ±1 bbox for increased difficulty
+            if abs(len(candidate) - target_len) > 1:
                 return
             signature = _signature(candidate)
             if signature not in used_signatures:
@@ -66,18 +81,42 @@ class DetectMultiFormatter(Formatter):
 
         attempts = 0
         while len(distractors) < 3 and attempts < 50:
-            keep_count = random.randint(1, target_len - 1) if target_len > 1 else 1
-            keep_indices = random.sample(range(target_len), keep_count)
-            candidate = [target_bboxes[idx] for idx in keep_indices]
-            while len(candidate) < target_len:
-                candidate.append(random_bbox(random.choice(target_bboxes)))
+            # Randomly decide to add or remove a bbox from the correct answer
+            operation = random.choice(["add", "remove", "replace"])
+            
+            if operation == "add":
+                # Add one extra bbox to the correct answer
+                candidate = target_bboxes.copy()
+                candidate.append(get_random_bbox())
+            elif operation == "remove" and target_len > 1:
+                # Remove one bbox from the correct answer
+                remove_idx = random.randint(0, target_len - 1)
+                candidate = [
+                    bbox for i, bbox in enumerate(target_bboxes) if i != remove_idx
+                ]
+            else:
+                # Replace some bboxes (fallback)
+                keep_count = random.randint(1, target_len - 1) if target_len > 1 else 1
+                keep_indices = random.sample(range(target_len), keep_count)
+                candidate = [target_bboxes[idx] for idx in keep_indices]
+                while len(candidate) < target_len:
+                    candidate.append(get_random_bbox())
+            
             add_candidate(candidate)
             attempts += 1
 
         while len(distractors) < 3:
-            candidate = [
-                random_bbox(random.choice(target_bboxes)) for _ in range(target_len)
-            ]
+            # Generate random candidates with ±1 bbox
+            if random.random() < 0.5 and target_len > 1:
+                # Remove one bbox
+                remove_idx = random.randint(0, target_len - 1)
+                candidate = [
+                    bbox for i, bbox in enumerate(target_bboxes) if i != remove_idx
+                ]
+            else:
+                # Add one bbox
+                candidate = target_bboxes.copy()
+                candidate.append(get_random_bbox())
             add_candidate(candidate)
 
         choices = [target_bboxes]
