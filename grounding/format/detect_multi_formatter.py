@@ -27,9 +27,9 @@ class DetectMultiFormatter(Formatter):
         super().__init__("detect_multi")
 
     def check_eligible(self, data: GroundingData) -> bool:
-        if any(len(bboxes) > 1 for bboxes in data.objs.values()):
-            return True
-        return random.random() < 0.1
+        return any(len(bboxes) > 1 for bboxes in data.objs.values())
+        # return True
+        # return random.random() < 0.1
 
     def format(self, data: GroundingData) -> SITEData:
         multi_objs = [
@@ -60,7 +60,9 @@ class DetectMultiFormatter(Formatter):
 
         def get_random_bbox() -> list[float]:
             """Get a bbox, preferring real bboxes from other objects"""
-            if other_bboxes_pool and random.random() < 0.8:  # 80% chance to use real bbox
+            if (
+                other_bboxes_pool and random.random() < 0.8
+            ):  # 80% chance to use real bbox
                 return random.choice(other_bboxes_pool)
             else:
                 return random_bbox(random.choice(target_bboxes))
@@ -83,7 +85,7 @@ class DetectMultiFormatter(Formatter):
         while len(distractors) < 3 and attempts < 50:
             # Randomly decide to add or remove a bbox from the correct answer
             operation = random.choice(["add", "remove", "replace"])
-            
+
             if operation == "add":
                 # Add one extra bbox to the correct answer
                 candidate = target_bboxes.copy()
@@ -101,7 +103,7 @@ class DetectMultiFormatter(Formatter):
                 candidate = [target_bboxes[idx] for idx in keep_indices]
                 while len(candidate) < target_len:
                     candidate.append(get_random_bbox())
-            
+
             add_candidate(candidate)
             attempts += 1
 
