@@ -42,7 +42,7 @@ class DetectSingleFormatter(Formatter):
                 break
         input_text = TEMPLATE.format(obj_name=obj_name)
         choices = [bbox]
-        while len(other_bboxes) < 8:
+        while len(other_bboxes) < 3:
             other_bboxes.append(random_bbox(bbox))
         choices.extend(random.sample(other_bboxes, 3))
         choices = [str(choice) for choice in choices]

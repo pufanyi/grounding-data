@@ -74,7 +74,7 @@ class DetectMultiFormatter(Formatter):
             add_candidate(candidate)
             attempts += 1
 
-        while len(distractors) < 8:
+        while len(distractors) < 3:
             candidate = [
                 random_bbox(random.choice(target_bboxes)) for _ in range(target_len)
             ]
