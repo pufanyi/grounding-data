@@ -17,7 +17,7 @@ class FormatterSpec(NamedTuple):
     output_path: Path
 
 
-TARGET_COUNT = 100_000
+TARGET_COUNT = 1_000_000
 
 
 def _root_dir() -> Path:
